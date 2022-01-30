@@ -621,7 +621,7 @@ def hand_typing(update: Update, context: CallbackContext) -> None:
 
 def main():
 
-    updater = Updater('5230717894:AAHhisY4pCyYOIUr7MkwwzYPj9TLQ7GUG5s')
+    updater = Updater('YOUR-TELEGRAM-TOKEN')
     dispatcher = updater.dispatcher
 
     dispatcher.add_handler(CommandHandler('start', start))
