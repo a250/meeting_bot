@@ -101,10 +101,12 @@ class Meeting():
 
         self.invited = list(set(self.invited))
         # self.waitfor = self.invited
+        self.update()
         return self.invited
 
     def remove_persons(self, names):
         self.invited = list(set(self.invited) - set(names))
+        self.update()
         return self.invited
 
     def add_options(self, opts):
@@ -113,6 +115,7 @@ class Meeting():
         old = list(self.options.values())
         all = set(new + old)
         self.options = {int(i): v for i, v in enumerate(all)}
+        self.update()
         return self.options
 
     def remove_options(self, opts):
@@ -120,6 +123,7 @@ class Meeting():
         old = list(self.options.values())
         all = list(set(old) - set(new))
         self.options = {int(i): v for i, v in enumerate(list(all))}
+        self.update()
         return self.options
 
     def run_voting(self):
