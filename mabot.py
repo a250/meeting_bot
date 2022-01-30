@@ -245,7 +245,7 @@ class Meeting():
         else:
             respond += empty_line
         if self.status == self.STATUS[0]:
-            respond += '\n{empty_margin}  [/add_persons /remove_persons]'
+            respond += f'\n{empty_margin}  [/add_persons /remove_persons]'
 
         respond += \
         f'''
@@ -255,7 +255,7 @@ class Meeting():
         else:
             respond += empty_line
         if self.status == self.STATUS[0]:
-            respond += '\n{empty_margin}[/add_options /remove_options]'
+            respond += f'\n{empty_margin}[/add_options /remove_options]'
 
         respond += \
         f'''
