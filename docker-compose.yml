@@ -12,7 +12,7 @@ services:
       POSTGRES_PASSWORD: telegrambot
       PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
-      - /Users/azyablitsev/Documents/projects/msai/01 sem/01 SoftwareDev/10 bot/meeting_arrangement_bot/db:/var/lib/postgresql/data
+      - /YOUR/PATH/TO/FOLDER/WHERE/DATABASE/WILL/STORE/db:/var/lib/postgresql/data
 
   adminer:
     image: adminer
