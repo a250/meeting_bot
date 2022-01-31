@@ -65,7 +65,7 @@ class Meeting():
         'success',
         'failure'
     ]
-    DB_FILE = 'db.csv'
+    # DB_FILE = 'db.csv'
 
     MODEL = MeetingDB
 
@@ -87,7 +87,13 @@ class Meeting():
             self.voted = dict()
             self.waitfor = []
             self.user_id = user.id
-            self.username = user.username
+            if user.username:
+                self.username = user.username
+            else:
+                self.username = f'user_{user.id}'
+                print(f'No username, use user_id instead: {self.username}')
+
+            # print(user, type(user), dir(user), hasattr(user, 'id'), hasattr(user, 'username'), f'{user.username=}')
             self.user_firstname = user.first_name
             self.result = []
 
@@ -143,7 +149,6 @@ class Meeting():
     def change_duration(self, duration):
         self.duration = duration
         self.update()
-
 
     @db_session
     def update(self):
@@ -235,7 +240,6 @@ class Meeting():
     def get_info(self):
         empty_margin = '                           '
         empty_line = f'\n{empty_margin}[empty]'
-
         respond = f'''
         <b>Meeting #{self.index}</b> <b>"{self.meeting_name}"</b> from <b>{self.user_firstname} ({self.username})</b> 
         
@@ -291,11 +295,12 @@ YOU'VE GOT RESULT: <b>{self.status}</b> '''
 class UserMeetings():
     MODEL = MeetingDB
 
-    def __init__(self, name):
-        self.user = name
+    def __init__(self, user):
+        self.user = user
         self.my_ative_votings = []
         self.my_meetings = []
         self.current_meeting = None
+        print(self.user)
 
     def start(self, name):
         self.user = None
@@ -310,7 +315,8 @@ class UserMeetings():
 
     @db_session
     def get_all_my_meeting(self):
-        items = (select(m for m in self.MODEL if (m.username == self.user.username and m.status != 'archive')))
+        # items = (select(m for m in self.MODEL if (m.username == self.user.username and m.status != 'archive')))
+        items = (select(m for m in self.MODEL if (m.user_id == self.user.id and m.status != 'archive')))
         my_meetings_id = [i.get_pk() for i in items]
         # print(my_meetings_id)
         self.my_meetings = [None] * len(my_meetings_id)
@@ -333,7 +339,7 @@ class UserMeetings():
         self.my_ative_votings[meeting_id].vote_done(self.user.username, options)
 
 def start(update: Update, context: CallbackContext):
-    # print(update.effective_user)
+    print(update.effective_user)
     context.bot_data[update.effective_user] = dict()
     context.bot_data[update.effective_user]['UM'] = UserMeetings(update.effective_user)
     welcome = \
@@ -360,14 +366,18 @@ def authorized(update: Update, context: CallbackContext):
     if update.effective_user not in context.bot_data.keys():
         context.bot_data[update.effective_user] = dict()
         context.bot_data[update.effective_user]['UM'] = UserMeetings(update.effective_user)
+        print('New session with ',update.effective_user)
     else:
         if 'UM' not in context.bot_data[update.effective_user].keys():
             context.bot_data[update.effective_user]['UM'] = UserMeetings(update.effective_user)
+            print('New session with ',update.effective_user)
+
 
 def new_meeting(update: Update, context: CallbackContext):
     authorized(update, context)
     # context.bot_data[update.effective_user]['UM'] = user_obj
     context.bot_data[update.effective_user]['command'] = 'new_meeting'
+    # print(context.bot_data.keys())
     update.message.reply_text(f'Type the name of meeting:')
 
 def meeting_info(update: Update, context: CallbackContext):
@@ -392,8 +402,6 @@ def all_my_meetings(update: Update, context: CallbackContext):
         for j, m in v.options.items():
             respond += f'\n                    - {m.strftime("%d.%m.%Y %H:%M")}'
         respond += '\n\n'
-        # options = ', '.join([f'{k}) "{t.strftime("%d.%m.%Y %H:%M")}"' for k, t in v.options.items()])
-        # respond += f'{i}) meeting "{v.meeting_name}" with options {options}\n'
 
     keyboard = [[f'/my_meeting {i}' for i in  range(len(list_of_meetings))]] + [['/all_my_meetings']]
     reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
@@ -621,7 +629,7 @@ def hand_typing(update: Update, context: CallbackContext) -> None:
 
 def main():
 
-    updater = Updater('YOUR-TELEGRAM-TOKEN')
+    updater = Updater('5230717894:AAHhisY4pCyYOIUr7MkwwzYPj9TLQ7GUG5s')
     dispatcher = updater.dispatcher
 
     dispatcher.add_handler(CommandHandler('start', start))
