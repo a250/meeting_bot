@@ -1,13 +1,12 @@
+import os
+
+from pony.orm import *
+from datetime import datetime, timedelta
+
 from telegram import (
     Update,
-    Poll,
-    Chat,
-    ChatMember,
     ParseMode,
-    ChatMemberUpdated,
     ReplyKeyboardMarkup,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
 )
 
 from telegram.ext import (
@@ -16,19 +15,8 @@ from telegram.ext import (
     CallbackContext,
     MessageHandler,
     Filters,
-    ChatMemberHandler,
-    CallbackQueryHandler,
     PollAnswerHandler,
-    PollHandler,
 )
-
-
-from datetime import datetime, timedelta
-import os.path
-import pandas as pd
-from ast import literal_eval
-from random import random
-from pony.orm import *
 
 db = Database()
 
@@ -39,6 +27,8 @@ db.bind(provider='postgres',
         host='localhost',
         database='telebot_db')
 
+
+##Class for processing ORM abstraction above the database
 class MeetingDB(db.Entity):
     #id = Required(int)
     index = Optional(int)
@@ -56,6 +46,8 @@ class MeetingDB(db.Entity):
     user_firstname = Optional(str)
     result = Optional(StrArray)
 
+
+##Class for process every instance of certain meeting
 class Meeting():
     TIME_TO_LIVE = 8
     STATUS = [
@@ -65,14 +57,12 @@ class Meeting():
         'success',
         'failure'
     ]
-    # DB_FILE = 'db.csv'
-
     MODEL = MeetingDB
+
 
     def __init__(self, user, meeting_name = None, index = None):
 
         self.db = self.MODEL
-
         if index:
             self.load(index)
         else:
@@ -93,11 +83,10 @@ class Meeting():
                 self.username = f'user_{user.id}'
                 print(f'No username, use user_id instead: {self.username}')
 
-            # print(user, type(user), dir(user), hasattr(user, 'id'), hasattr(user, 'username'), f'{user.username=}')
             self.user_firstname = user.first_name
             self.result = []
-
             self.create()
+
 
     def add_persons(self, names):
         if isinstance(names, list):
@@ -106,14 +95,15 @@ class Meeting():
             self.invited.append(names)
 
         self.invited = list(set(self.invited))
-        # self.waitfor = self.invited
         self.update()
         return self.invited
+
 
     def remove_persons(self, names):
         self.invited = list(set(self.invited) - set(names))
         self.update()
         return self.invited
+
 
     def add_options(self, opts):
         # print('add_options', opts)
@@ -124,6 +114,7 @@ class Meeting():
         self.update()
         return self.options
 
+
     def remove_options(self, opts):
         new = list(opts.values())
         old = list(self.options.values())
@@ -131,6 +122,7 @@ class Meeting():
         self.options = {int(i): v for i, v in enumerate(list(all))}
         self.update()
         return self.options
+
 
     def run_voting(self):
         if len(self.options) < 2:
@@ -142,13 +134,16 @@ class Meeting():
         self.update()
         return (True, 'ok')
 
+
     def archivate_voting(self):
         self.status = self.STATUS[2]
         self.update()
 
+
     def change_duration(self, duration):
         self.duration = duration
         self.update()
+
 
     @db_session
     def update(self):
@@ -170,6 +165,7 @@ class Meeting():
                  'user_firstname': self.user_firstname,
                  'result': result_to_str}
         self.db[self.index].set(**struc)
+
 
     @db_session
     def create(self):
@@ -195,6 +191,7 @@ class Meeting():
                  'result': self.result}
         self.db(**struc)
 
+
     @db_session
     def load(self, ind):
         meeting = self.db[ind]
@@ -204,17 +201,15 @@ class Meeting():
         self.status = meeting.status
         self.actuality_up_to = meeting.actuality_up_to
         self.invited = meeting.invited
-
         self.options = {int(k): datetime.strptime(t.strip(), '%d.%m.%Y %H:%M') for k, t in meeting.options.items()}
         self.duration = meeting.duration
         self.voted = meeting.voted
-
         self.waitfor = meeting.waitfor  # [] if item['waitfor'] == 0 else str(item['waitfor']).replace('[', '').replace(']', '').replace("'", '').split(', ')
-
         self.user_id = meeting.user_id
         self.username = meeting.username
         self.user_firstname = meeting.user_firstname
         self.result = [datetime.strptime(t.strip(), '%d.%m.%Y %H:%M') for t in meeting.result]
+
 
     def check_results(self):
         if len(self.waitfor) == 0:
@@ -226,6 +221,7 @@ class Meeting():
             else:
                 self.status = self.STATUS[4]
 
+
     def vote_done(self, username, options):
         # print('here voted:', options, len(self.options))
         if max(options) == len(self.options):
@@ -236,6 +232,7 @@ class Meeting():
 
         self.check_results()
         self.update()
+
 
     def get_info(self):
         empty_margin = '                           '
@@ -289,11 +286,13 @@ YOU'VE GOT RESULT: <b>{self.status}</b> '''
         if self.status == self.STATUS[3]:
             respond += 'Confirmed options: ' + ', '.join([f'{t.strftime("%d.%m.%Y %H:%M")}' for t in self.result])
 
-
         return respond
 
+
+## Class for managing set of user's meetings
 class UserMeetings():
     MODEL = MeetingDB
+
 
     def __init__(self, user):
         self.user = user
@@ -302,16 +301,20 @@ class UserMeetings():
         self.current_meeting = None
         print(self.user)
 
+
     def start(self, name):
         self.user = None
 
+
     def create_new_meeting(self, name):
         self.current_meeting = Meeting(self.user, meeting_name=name)
+
 
     def get_info(self):
         if not self.current_meeting:
             return 'You should create /new_meeting <name> first'
         return self.current_meeting.get_info()
+
 
     @db_session
     def get_all_my_meeting(self):
@@ -324,9 +327,9 @@ class UserMeetings():
             # print(f'{l_id}')
             self.my_meetings[i] = Meeting(self.user, index=l_id)
 
+
     @db_session
     def get_voting_list(self):
-
         items = (select(m for m in self.MODEL if (self.user.username in m.waitfor and m.status != 'archive')))
         vote_id_list = [i.get_pk() for i in items]
         # print(vote_id_list)
@@ -335,9 +338,12 @@ class UserMeetings():
             # print(f'{l_id}')
             self.my_ative_votings[i] = Meeting(self.user, index=l_id)
 
+
     def vote_done(self, meeting_id, options):
         self.my_ative_votings[meeting_id].vote_done(self.user.username, options)
 
+
+## Part below for handling telegram requests
 def start(update: Update, context: CallbackContext):
     print(update.effective_user)
     context.bot_data[update.effective_user] = dict()
@@ -357,8 +363,8 @@ def start(update: Update, context: CallbackContext):
     <pre>[3]</pre> Check if you were asked to confirm convenient options for you and vote for appropriate one /voting_list  
 
     '''
-
     update.message.reply_text(welcome, parse_mode='HTML')
+
 
 def authorized(update: Update, context: CallbackContext):
     user_obj = context.bot_data.get(update.effective_user, None)
@@ -380,10 +386,12 @@ def new_meeting(update: Update, context: CallbackContext):
     # print(context.bot_data.keys())
     update.message.reply_text(f'Type the name of meeting:')
 
+
 def meeting_info(update: Update, context: CallbackContext):
     info = context.bot_data[update.effective_user]['UM'].get_info()
     # update.message.reply_text(f'Hello {update.effective_user.first_name}')
     update.message.reply_text(info, parse_mode='HTML')
+
 
 def all_my_meetings(update: Update, context: CallbackContext):
     authorized(update, context)
@@ -407,6 +415,7 @@ def all_my_meetings(update: Update, context: CallbackContext):
     reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
     update.message.reply_text(respond, reply_markup=reply_markup, parse_mode='HTML')
 
+
 def my_meeting(update: Update, context: CallbackContext):
     meeting_id = int(context.args[0])
     # print(meeting_id)
@@ -427,6 +436,7 @@ def add_persons(update: Update, context: CallbackContext) -> None:
     context.bot_data[update.effective_user]['command'] = 'add_persons'
     update.message.reply_text(f'Type the usernames: username1, [username2, ...]')
 
+
 def remove_persons(update: Update, context: CallbackContext) -> None:
     status = context.bot_data[update.effective_user]['UM'].current_meeting.status
     if status != 'preparing':
@@ -436,6 +446,7 @@ def remove_persons(update: Update, context: CallbackContext) -> None:
     context.bot_data[update.effective_user]['command'] = 'remove_persons'
     update.message.reply_text(f'Type the usernames: username1, [username2, ...]')
 
+
 def add_options(update: Update, context: CallbackContext) -> None:
     status = context.bot_data[update.effective_user]['UM'].current_meeting.status
     if status != 'preparing':
@@ -443,6 +454,7 @@ def add_options(update: Update, context: CallbackContext) -> None:
         return None
     context.bot_data[update.effective_user]['command'] = 'add_options'
     update.message.reply_text(f'Type start of meeting: dd.mm.yyyy HH:MM, [dd.mm.yyyy HH:MM, ...]')
+
 
 def remove_options(update: Update, context: CallbackContext) -> None:
     status = context.bot_data[update.effective_user]['UM'].current_meeting.status
@@ -452,6 +464,7 @@ def remove_options(update: Update, context: CallbackContext) -> None:
 
     context.bot_data[update.effective_user]['command'] = 'remove_options'
     update.message.reply_text(f'Type start of meeting: dd.mm.yy HH:MM, [dd.mm.yy HH:MM, ...]')
+
 
 def change_duration(update: Update, context: CallbackContext) -> None:
     status = context.bot_data[update.effective_user]['UM'].current_meeting.status
@@ -468,9 +481,11 @@ def run_voting(update: Update, context: CallbackContext) -> None:
         update.message.reply_text(message)
     update.message.reply_text(context.bot_data[update.effective_user]['UM'].get_info(), parse_mode='HTML')
 
+
 def archivate_voting(update: Update, context: CallbackContext) -> None:
     context.bot_data[update.effective_user]['UM'].current_meeting.archivate_voting()
     update.message.reply_text(context.bot_data[update.effective_user]['UM'].get_info(), parse_mode='HTML')
+
 
 def voting_list(update: Update, context: CallbackContext) -> None:
     authorized(update, context)
@@ -491,6 +506,7 @@ def voting_list(update: Update, context: CallbackContext) -> None:
     reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
     update.message.reply_text(respond, reply_markup=reply_markup, parse_mode='HTML')
     # context.bot.send_message(chat_id=update.effective_chat.id, text=f'{respond}')
+
 
 def vote(update: Update, context: CallbackContext) -> None:
     if len(context.args) == 0:
@@ -520,8 +536,8 @@ def vote(update: Update, context: CallbackContext) -> None:
             "meeting_id": meeting_id
         }
     }
-    # print(payload)
     context.bot_data.update(payload)
+
 
 def receive_poll_answer(update: Update, context: CallbackContext) -> None:
 
@@ -555,6 +571,7 @@ def receive_poll_answer(update: Update, context: CallbackContext) -> None:
             context.bot_data[poll_id]["chat_id"], context.bot_data[poll_id]["message_id"]
         )
 
+
 def help_command(update: Update, context: CallbackContext) -> None:
     help = f'''
     <b>{update.effective_user.first_name}</b>, by this <b>Meeting Arrangements Bot</b> you could:
@@ -567,6 +584,7 @@ def help_command(update: Update, context: CallbackContext) -> None:
 
     '''
     context.bot.send_message(chat_id=update.effective_chat.id, text=help, parse_mode='HTML')
+
 
 def hand_typing(update: Update, context: CallbackContext) -> None:
     sub_string = update.message.text
@@ -624,14 +642,13 @@ def hand_typing(update: Update, context: CallbackContext) -> None:
                                  text=context.bot_data[update.effective_user]['UM'].get_info(),
                                  parse_mode='HTML')
 
-
     context.bot_data[update.effective_user]['command'] = None
 
-def main():
 
-    updater = Updater('5230717894:AAHhisY4pCyYOIUr7MkwwzYPj9TLQ7GUG5s')
+def main(token):
+
+    updater = Updater(token)
     dispatcher = updater.dispatcher
-
     dispatcher.add_handler(CommandHandler('start', start))
     dispatcher.add_handler(CommandHandler('meeting_info', meeting_info))
     dispatcher.add_handler(CommandHandler('new_meeting', new_meeting))
@@ -646,8 +663,6 @@ def main():
     dispatcher.add_handler(CommandHandler('all_my_meetings', all_my_meetings))
     dispatcher.add_handler(CommandHandler('my_meeting', my_meeting))
     dispatcher.add_handler(CommandHandler('change_duration', change_duration))
-
-
     dispatcher.add_handler(CommandHandler('vote', vote))
     dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, hand_typing))
     dispatcher.add_handler(PollAnswerHandler(receive_poll_answer))
@@ -657,8 +672,11 @@ def main():
     updater.start_polling()
     updater.idle()
 
+
 if __name__ == "__main__":
-
-    db.generate_mapping(create_tables=True)
-
-    main()
+    if 'telegram_token' in os.environ:
+        token = os.environ["telegram_token"]
+        db.generate_mapping(create_tables=True)
+        main(token)
+    else:
+        print('For using please set up environment variable "telegram_token"')
